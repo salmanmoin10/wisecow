@@ -26,46 +26,32 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v3
-
       - name: Install Kind
         run: |
           curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64
           chmod +x ./kind
           sudo mv ./kind /usr/local/bin/kind
-
       - name: Create Kind cluster
         run: kind create cluster --config kind-config.yaml
-
+      - name: Label Kind node for ingress
+        run: kubectl label node kind-control-plane ingress-ready=true
       - name: Install kubectl
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
-
-      - name: Label Kind node for ingress
-        run: kubectl label node kind-control-plane ingress-ready=true
-
       - name: Install ingress-nginx
-        run: |
-          kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.0/deploy/static/provider/kind/deploy.yaml
-
+        run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.0/deploy/static/provider/kind/deploy.yaml
       - name: Wait for ingress controller
+        run: kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=120s
+      - name: Generate and apply TLS secret
         run: |
-          kubectl rollout status deployment/ingress-nginx-controller \
-            -n ingress-nginx --timeout=120s
-
-      - name: Generate TLS certs
-        run: |
-          openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-            -keyout tls.key -out tls.crt -subj "/CN=localhost"
+          openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -subj "/CN=localhost"
           CRT_BASE64=$(base64 tls.crt | tr -d '\n')
           KEY_BASE64=$(base64 tls.key | tr -d '\n')
-          sed -i "s|\[PASTE_BASE64_ENCODED_TLS.CRT_HERE\]|$CRT_BASE64|g" k8s/tls-secret.yaml
-          sed -i "s|\[PASTE_BASE64_ENCODED_TLS.KEY_HERE\]|$KEY_BASE64|g" k8s/tls-secret.yaml
-
+          kubectl create secret tls wisecow-tls --namespace=default --cert=tls.crt --key=tls.key --dry-run=client -o yaml | kubectl apply -f -
       - name: Deploy to Kind
         run: |
-          kubectl apply -f k8s/tls-secret.yaml
           kubectl apply -f k8s/deployment.yaml
           kubectl apply -f k8s/service.yaml
           kubectl apply -f k8s/ingress.yaml

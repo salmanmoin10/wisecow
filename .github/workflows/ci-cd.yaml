@@ -19,7 +19,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: moinsalman/wisecow:latest
+          tags: moinsalman/wisecow:latest  
 
   deploy:
     runs-on: ubuntu-latest
@@ -30,12 +30,14 @@ jobs:
         run: curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.20.0/kind-linux-amd64 && chmod +x ./kind && sudo mv ./kind /usr/local/bin/kind
       - name: Create Kind cluster
         run: kind create cluster --config kind-config.yaml
+      - name: Label Kind node for ingress
+        run: kubectl label node kind-control-plane ingress-ready=true
       - name: Install kubectl
         run: curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" && chmod +x kubectl && sudo mv kubectl /usr/local/bin/
       - name: Install ingress-nginx
         run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.0/deploy/static/provider/kind/deploy.yaml
       - name: Wait for ingress
-        run: kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=90s
+        run: kubectl wait --namespace ingress-nginx --for=condition=ready pod --selector=app.kubernetes.io/component=controller --timeout=120s
       - name: Generate TLS certs
         run: |
           openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -subj "/CN=localhost"

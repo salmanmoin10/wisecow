@@ -15,6 +15,9 @@ spec:
       - path: /bin/nc
     action: Allow
   file:
+    matchPaths:
+      - path: /etc/**  # Deny access to /etc files
+    action: Audit  # Logs violation (Block for deny; Audit for demo log)
     matchDirectories:
       - dir: /app/
     action: Allow

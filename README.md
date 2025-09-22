@@ -1,28 +1,42 @@
-# Cow wisdom web server
+# Accuknox DevOps Trainee Practical Assessment: Wisecow Deployment
 
-## Prerequisites
+Containerized and deployed the Wisecow app (from https://github.com/nyrahul/wisecow) on Kind Kubernetes with TLS, CI/CD, PS2 scripts, and PS3 KubeArmor policy. Repo is public.
 
-```
-sudo apt install fortune-mod cowsay -y
-```
+## PS1: Containerization and Deployment
+- **App**: Original `wisecow.sh` (Bash HTTP server with fortune/cowsay on port 4499).
+- **Docker**: `Dockerfile` builds Ubuntu image with deps and PATH fix.
+- **Kubernetes**: Manifests in `k8s/` (deployment, service, ingress with TLS secret).
+- **TLS**: Self-signed certs for HTTPS; ingress redirects HTTP to HTTPS.
+- **CI/CD**: `.github/workflows/ci-cd.yaml` builds/pushes to Docker Hub (`moinsalman/wisecow:latest`), deploys to temp Kind on push (Actions tab shows runs).
 
-## How to use?
+### Local Setup and Test
+1. Install Kind/kubectl (in Codespaces: curl commands from workflow).
+2. `kind create cluster --config kind-config.yaml`.
+3. `kubectl label node kind-control-plane ingress-ready=true`.
+4. `kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.0/deploy/static/provider/kind/deploy.yaml`.
+5. `kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=120s`.
+6. Generate certs: `openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -subj "/CN=localhost"`.
+7. `kubectl create secret tls wisecow-tls --cert=tls.crt --key=tls.key`.
+8. `kubectl apply -f k8s/`.
+9. Port-forward: `kubectl port-forward svc/ingress-nginx-controller -n ingress-nginx 8080:80 8443:443`.
+10. Test: `curl -k -H "Host: localhost" https://127.0.0.1:8443/` (returns random wise cow quote over TLS).
 
-1. Run `./wisecow.sh`
-2. Point the browser to server port (default 4499)
+## PS2: Scripts (Objectives 1 & 4)
+- **System Health Monitor** (`system_health_monitor.sh`): Checks CPU/mem/disk (>80% alert) and processes; logs to `/var/log/system_health.log`.
+  - Test: `./system_health_monitor.sh` (alerts if stressed).
+- **App Health Checker** (`app_health_checker.sh`): Checks HTTP status (200/301/302 = UP).
+  - Test: `./app_health_checker.sh https://127.0.0.1:8443/` (UP with port-forward).
 
-## What to expect?
-![wisecow](https://github.com/nyrahul/wisecow/assets/9133227/8d6bfde3-4a5a-480e-8d55-3fef60300d98)
+## PS3: Zero-Trust KubeArmor Policy
+- Policy: `kubearmor-policy.yaml` (allows fortune/cowsay/bash/nc; audits /etc access).
+- Install: Helm chart (`helm upgrade --install kubearmor kubearmor/kubearmor -n kubearmor --create-namespace`).
+- Apply: `kubectl apply -f kubearmor-policy.yaml`.
+- Test: Allowed `fortune | cowsay` works; `ls /etc` audited (logs detection in Kind).
+- Proof: `ps3-policy-status.png` (apply/status), `violation-screenshot.png` (logs showing pod monitoring—"Detected a Pod").
+- Note: Kind audits (no hard block due to AppArmor limit).
 
-# Problem Statement
-Deploy the wisecow application as a k8s app
+## CI/CD Verification
+- Push to main: Builds image, deploys to temp Kind with TLS (Actions tab).
+- Docker Hub: `moinsalman/wisecow:latest`.
 
-## Requirement
-1. Create Dockerfile for the image and corresponding k8s manifest to deploy in k8s env. The wisecow service should be exposed as k8s service.
-2. Github action for creating new image when changes are made to this repo
-3. [Challenge goal]: Enable secure TLS communication for the wisecow app.
-
-## Expected Artifacts
-1. Github repo containing the app with corresponding dockerfile, k8s manifest, any other artifacts needed.
-2. Github repo with corresponding github action.
-3. Github repo should be kept private and the access should be enabled for following github IDs: nyrahul
+All tested in Codespaces/Kind—contact for demo.

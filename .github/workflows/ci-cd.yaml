@@ -44,11 +44,9 @@ jobs:
         run: kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.0/deploy/static/provider/kind/deploy.yaml
       - name: Wait for ingress controller
         run: kubectl rollout status deployment/ingress-nginx-controller -n ingress-nginx --timeout=120s
-      - name: Generate and apply TLS secret
+      - name: Generate and create TLS secret
         run: |
           openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout tls.key -out tls.crt -subj "/CN=localhost"
-          CRT_BASE64=$(base64 tls.crt | tr -d '\n')
-          KEY_BASE64=$(base64 tls.key | tr -d '\n')
           kubectl create secret tls wisecow-tls --namespace=default --cert=tls.crt --key=tls.key --dry-run=client -o yaml | kubectl apply -f -
       - name: Deploy to Kind
         run: |
